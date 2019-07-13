@@ -1,0 +1,216 @@
+---
+title: "Course Project: Practical Machine Learning"
+author: "Zachary Sharrow"
+date: "7/12/2019"
+keep_md: true
+---
+
+## Summary  
+  
+The goal of this course project was to use what I learned in class to apply 
+machine learning techniques to a real-world data set. Training and test data were
+obtained from the course website and were generously provided by [Groupware@LES](http://groupware.les.inf.puc-rio.br/har). 
+They are part of a human activity recogition study that aimed to measure the 
+quality of a dumbbell curl exercise and consist of observations from a number of 
+on-body sensors. Participants performed the curl correctly and with 4 common
+mistakes, and the goal of the research was to create a model to distinguish among
+these outcomes based on sensor data (see the researchers' website for more 
+information).  
+  
+After reading and preparing the data, I split approximately 20% of the training 
+set and reserved it for cross-validation. I then fit a number of models on the 
+remaining training data using caret, assessed them using the validation data,
+and ultimately chose a gradient-boosted model from the `xgboost` package. The 
+final predictions are given at the very end of this document.  
+  
+## Data preparation  
+  
+Load required packages:  
+  
+```{r, include = F}
+library(caret); library(ggplot2); library(dplyr)
+```
+```{r, eval = F}
+library(caret); library(ggplot2); library(dplyr)
+```
+    
+Read data:    
+  
+```{r}
+train <- read.csv("pml-training.csv")
+test <- read.csv("pml-testing.csv")
+```
+  
+The data contained a lot of variables I didn't need or couldn't use because of a very
+high proportion of missing values:  
+  
+```{r}
+## In the training data
+train <- select(train, 8:ncol(train))
+na.cols <- colSums(is.na(train)) > 0
+train <- train[,!(na.cols)]
+blank.cols <- colSums(train == "") > 0
+train <- train[,!(blank.cols)]
+  
+## And in the test data
+test <- select(test, 8:ncol(test))
+na.cols <- colSums(is.na(test)) > 0
+test <- test[,!(na.cols)]
+blank.cols <- colSums(test == "") > 0
+test <- test[,!(blank.cols)]
+```
+
+I also transformed the `classe` variable (the outcome I wanted to predict) to a
+factor so that I could create my trained models without relying on R's formula
+notation, which is computationally ineffient:
+
+```{r}
+train$classe <- factor(unclass(train[53])[[1]])
+```
+   
+In order to assess multiple models and choose the best one without overfitting,
+I took a slice of my training set and reserved it for cross validation:  
+  
+```{r}
+set.seed(5209)
+inValidation <- createDataPartition(train$classe, p = .2, list = F)
+train <- train[-inValidation,]
+validate <- train[inValidation,]
+badvalid <- apply(validate, 1, function(x){sum(is.na(x)) > 0})
+validate <- validate[!(badvalid),]
+```
+  
+## Model fitting  
+  
+I compared a number of models:  
+  
+```{r, cache = T}
+ldamodel <- train(x = train[1:52], y = train$classe, method = "lda")
+rfmodel <- train(x = train[1:52], y = train$classe, method = "rf")
+bayesmodel <- train(x = train[1:52], y = train$classe, method = "nb")
+boostmodel <- train(train[1:52], train$classe, method="xgbTree")
+```
+  
+## Model performance  
+  
+To make it a bit simple for myself downstream, I set my reference value to 
+its own variable:  
+  
+```{r}
+known <- validate$classe
+```
+  
+  
+**Linear Discriminant Analysis**  
+    
+First, use the model to predict outcomes on the cross-validation set:  
+  
+```{r, cache = T}
+ldapred <- predict(ldamodel, validate)
+```
+  
+Then, evaluate its performance using `confusionMatrix`:  
+  
+```{r, cache = T}
+print(ldaperf <- confusionMatrix(ldapred, known))
+```
+  
+Finally, use a plot to present the performance visually:  
+  
+```{r }
+qplot(ldapred, known, geom="jitter", color = known, xlab = "Predicted Class",
+      ylab = "", main = "Linear Discriminant Analysis Prediction Peformance") + labs(colour = 'Actual Class')
+```
+  
+  
+**Random Forests**  
+  
+First, use the model to predict outcomes on the cross-validation set:  
+  
+```{r, cache = T}
+rfpred <- predict(rfmodel, validate)
+```
+  
+Then, evaluate its performance using `confusionMatrix`:  
+  
+```{r, cache = T}
+print(rfperf <- confusionMatrix(rfpred, known))
+```
+  
+Finally, use a plot to present the performance visually:  
+  
+```{r }
+qplot(rfpred, known, geom="jitter", color = known, xlab = "Predicted Class",
+      ylab = "", main = "Random Forest Prediction Peformance") + labs(colour = 'Actual Class')
+```
+  
+  
+**Naive Bayes**  
+  
+First, use the model to predict outcomes on the cross-validation set:  
+  
+```{r, cache = T}
+bayespred <- predict(bayesmodel, validate)
+```
+  
+Then, evaluate its performance using `confusionMatrix`:  
+  
+```{r, cache = T}
+print(bayesperf <- confusionMatrix(bayespred, known))
+```
+  
+Finally, use a plot to present the performance visually:  
+  
+```{r }
+qplot(bayespred, known, geom="jitter", color = known, xlab = "Predicted Class",
+      ylab = "", main = "Naive Bayes Prediction Peformance") + labs(colour = 'Actual Class')
+```
+  
+    
+**Gradient Boosted Trees**  
+  
+First, use the model to predict outcomes on the cross-validation set:  
+  
+```{r, cache = T}
+boostpred <- predict(boostmodel, validate)
+```
+  
+Then, evaluate its performance using `confusionMatrix`:  
+  
+```{r, cache = T}
+print(boostperf <- confusionMatrix(boostpred, known))
+```
+  
+Finally, use a plot to present the performance visually:  
+  
+```{r }
+qplot(boostpred, known, geom="jitter", color = known, xlab = "Predicted Class",
+      ylab = "", main = "Gradient Boosting Prediction Peformance") + labs(colour = 'Actual Class')
+```
+  
+  
+## Final prediction  
+  
+
+Both random forests and gradient boosting performed perfectly on my validation
+set. I'll choose to apply the boosted model to the final test data.  
+  
+```{r}
+print(finalpred <- predict(boostmodel, test))
+```
+  
+## Technical information  
+  
+This analysis was carried out totally from within RStudio Version 1.2.1522
+on a computer running the following:  
+  
+```{r session}
+sessionInfo()
+```
+  
+**THANK YOU FOR READING**   
+  
+
+
+
+
