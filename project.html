@@ -422,8 +422,8 @@ validate &lt;- validate[!(badvalid),]</code></pre>
 <p>I compared a number of models:</p>
 <pre class="r"><code>ldamodel &lt;- train(x = train[1:52], y = train$classe, method = &quot;lda&quot;)
 rfmodel &lt;- train(x = train[1:52], y = train$classe, method = &quot;rf&quot;)
-bayesmodel &lt;- train(x = train[1:52], y = train$classe, method = &quot;nb&quot;)</code></pre>
-<pre class="r"><code>boostmodel &lt;- train(train[1:52], train$classe, method=&quot;xgbTree&quot;)</code></pre>
+bayesmodel &lt;- train(x = train[1:52], y = train$classe, method = &quot;nb&quot;)
+boostmodel &lt;- train(train[1:52], train$classe, method=&quot;xgbTree&quot;)</code></pre>
 </div>
 <div id="model-performance" class="section level2">
 <h2>Model performance</h2>
